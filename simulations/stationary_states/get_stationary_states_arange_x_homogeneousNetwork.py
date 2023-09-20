@@ -181,18 +181,53 @@ for kStep in range( nSteps ):
 
 	# first column of s contains values for exc. conductances
 	# second column values for inhibitory conducances
-	Sexc=s[:,0]
+	Sexc=s[:,0]  # Returned by the function call `functions_sim.set_initial_conditions_for_nodes()` above, `s` is an ndarray of shape (N, 2), where N = N_STN + N_GPe = 1000 + 2. 
 	Sinh=s[:,1]
 
 	##################################################
 	# Euler step
 	# 1)
 	# calculate right-hand site of equation for membrane potential
-	v_Offset=ne.evaluate('1/tau*((Vrest-v) +(Vnoise-v)*Snoise+(Vexc-v)*Sexc+(Vinh-v)*Sinh)')
+	# (Anthony): Equation 5 of the paper (Under Methods section)
+	v_Offset=ne.evaluate('1/tau*( (Vrest-v) + \
+					              (Vnoise-v)*Snoise + \
+					              (Vexc-v)*Sexc + \
+					              (Vinh-v)*Sinh \
+					            )')
+
+###### NOTES (Anthony): ########################################################
+# - Variable `tau`` is set by the function call `functions_sim.set_initial_conditions_for_nodes()` few lines above. 
+#
+# - `tau` is an ndarray of length `N`, where `N` is the total number of neurons: 1000 + 2.
+# - The dict `system_parameters` is found under `functions.pars.py`.
+# - The first 1000 entries of the ndarray `tau` are instances of the random variable from Norm(mean=tauSTN, std=tauSTN*sigmaP) = Norm(150, 150*0.05) = Norm(150, 7.5).
+# - The last 2 entries of the ndarray `tau` are instances of the random variable from Norm(mean=tauGPe, std=tauGPe*sigmaP) = Norm(30, 30*0.05) = Norm(30, 1.5).
+#
+# - `Vrest` is an ndarray of length `N` where each of the value is VRestSTN = -38.0 mV.
+# - `Vnoise` is an ndarray of length `N` where the first N_STN=1000 values are Vexc=0. mV and
+#   the last 2 values are Vinh=-80. mV.
+# - `Vexc` is a float equal to 0. mV.
+# - `Vinh` is a float equal to -80. mV.
+# 
+# - If g_leak is scaled up by a factor of 50x from 0.02 to 1 mS/cm^2, then it is factored out from the equation above.
+# - By where `tau` is located in the equation and matching it with equation 5 of the paper, we can see that `tau` is the membrane capacitance `C` in the paper.
+# - In the paper, membrane capacitance is a random variable from a normal distribution of mean 3 micro-Farad/cm^2 and stdev of 0.05*3 micro-Farad/cm^2 = 0.15 micro-Farad/cm^2.
+# - In the code here, `tau` is drawn from Norm(150, 7.5) micro-Farad/cm^2, which each parameter is 50x scaled from the values stated in the paper. 
+#
+# - Does it make sense to scale each of these values by 50x?
+#   - Scaling the tau or membrane capacitance by 50x makes the membrane potential change at each step much smaller due to the larger membrane capacitance.
+#   - Scaling the g_leak by 50x makes the leaky current 50x larger than what it would have been.
+#     - A membrane with a larger leaky current would have a stronger tendency or smaller membrane time-constant for the membrane to reach its resting potential or ion equilibrium potential.
+################################################################################
+
+###### NOTES (Anthony): ########################################################
+# - `tauSyn is an ndarray of length 2, where the first entry is 1/tauSynExc and the second entry is 1/tauSynInh = ndarray([1/1.0, 1/3.3])
+################################################################################
+
 	# synaptic conductances
 	s_Offset=-np.multiply(s,tauSyn)
-	# noise conductances
-	Snoise_Offset=-Snoise/tauNoise
+	# noise conductances					 	
+	Snoise_Offset=-Snoise/tauNoise  # tauNoise is set at 1.0 ms; part of equation 9 of the paper.
 	# dynamic thresholds
 	VT_Offset=-(VT-VTRest)/tauVT
 
@@ -208,15 +243,28 @@ for kStep in range( nSteps ):
 	v[neuronsToBeSetToResetValue]=VR*np.ones( len(neuronsToBeSetToResetValue) )
 
 	# update membrane potentials of all neurons that are not in spike mode
-	v[neuronsNotAtRefractory]=v[neuronsNotAtRefractory]+dt*v_Offset[neuronsNotAtRefractory]
-	s=ne.evaluate('s+dt*s_Offset')
-	Snoise=ne.evaluate('Snoise+dt*Snoise_Offset')
+
+	v[neuronsNotAtRefractory]= (v[neuronsNotAtRefractory] +
+	                            dt * v_Offset[neuronsNotAtRefractory]
+						       )
+###### NOTES (Anthony): ########################################################
+# - Equation 5 of the paper (Under Methods section)
+# - Here the membrane potential for the neurons that are not in refractory period is updated using the timestep of dt
+################################################################################
+
+	s=ne.evaluate('s+dt*s_Offset') # Equation 7 of the paper
+	Snoise=ne.evaluate('Snoise+dt*Snoise_Offset')  # Part of equation 9 of the paper
 	VT=ne.evaluate('VT+dt*VT_Offset')
 
 	# update noise conductances if Poisson spikes arrive
 	# spikeArrival[ currentSlotInSpikeArrival ] cotains the number of arriving spikes, i.e. 0, 1, ...
 	Snoise+=noiseIntensities/tauNoise*spikeArrival[ currentSlotInSpikeArrival ]
-
+###### NOTES (Anthony): ########################################################
+# - Equation 9 of the paper
+# - spikeArrival is the summation section of equation 9.
+# - `tauNoise` is set at 1.0 ms, matching that of `tau_syn` in equation 9 of the paper.
+# - 
+################################################################################
 	
 	##################################################
 	# evaluate threshold crossing

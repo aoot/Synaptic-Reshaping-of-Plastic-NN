@@ -404,6 +404,13 @@ def set_initial_conditions_for_nodes( system_parameters ):
     Vrest=np.full( N, system_parameters['VRestSTN'] )
     Vrest[N_STN:]=np.full( N_GPe, system_parameters['VRestGPe'] )
 
+###### NOTES (Anthony): ########################################################
+# - `tau` is an ndarray of length `N`, where `N` is the total number of neurons: 1000 + 2.
+# - The dict `system_parameters` is found under `functions.pars.py`.
+# - The first 1000 entries of the ndarray `tau` are instances of the random variable from Norm(mean=tauSTN, std=tauSTN*sigmaP) = Norm(150, 150*0.05) = Norm(150, 7.5).
+# - The last 2 entries of the ndarray `tau` are instances of the random variable from Norm(mean=tauGPe, std=tauGPe*sigmaP) = Norm(30, 30*0.05) = Norm(30, 1.5).
+################################################################################
+
     tau=np.random.normal( system_parameters['tauSTN'] , system_parameters['tauSTN']*system_parameters['sigmaP'], N )
     # and STN neurons
     tau[N_STN:]=np.random.normal( system_parameters['tauGPe'], system_parameters['tauGPe']*system_parameters['sigmaP'], N_GPe )
