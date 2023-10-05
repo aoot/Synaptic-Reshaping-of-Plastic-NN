@@ -385,12 +385,19 @@ for kStep in range( nSteps ):
 	if numOfArrivingSpikes>0:
 
 		# spikes are arriving and cause upades of synaptic conductances
-		activeConnectionWeights=scipy.sparse.csc_matrix( ( np.array(cMatrix[synapsesOfArrivingSpikes[1:,1],synapsesOfArrivingSpikes[1:,0]])[0], (synapsesOfArrivingSpikes[1:,1],synapsesOfArrivingSpikes[1:,0]) ), shape=(N,N) )
+		## Ant: Seems like this should use the connection matrix instead of the cMatrix, which is the weight matrix.
+		activeConnectionWeights=scipy.sparse.csc_matrix( 
+			( np.array(cMatrix[synapsesOfArrivingSpikes[1:,1],synapsesOfArrivingSpikes[1:,0]])[0], 
+			  (synapsesOfArrivingSpikes[1:,1], synapsesOfArrivingSpikes[1:,0]) 
+			), 
+			shape=(N,N)
+		)
 		
 		# update synaptic weight
 		# this matrix product effectively calculates the sum over weights of active synapses 
 		# this sum is then added to 's' while rescaling with 'synaptic_offset_after_spike' = 1/N
 		# first column of s are excitatory and second column are inhibitory synapses
+		## Ant: This is the second half of equation 4.
 		s+=synaptic_offset_after_spike*activeConnectionWeights.dot( basicFilterSpikingNeurons )
 
 		#########################################################
@@ -435,6 +442,7 @@ for kStep in range( nSteps ):
 			# if any weight violates lower bound
 			if len(indicesBelowLowerThreshold.nonzero()[0])!=0:
 				indicesAboveLowerThreshold=csc_Ones-indicesBelowLowerThreshold   # get array with ones at weights that are above lower threshold
+				## Ant: This line turns those below threshold to have a conn weight of 0 (multiplied by zero), hence has the same effect as disconnecting that neuron because the above code when updating the weight we are using the cMatrix (which is the weight matrix instead of the connection matrix), and thus these neurons would no longer be updated EVER.
 				cMatrix=cMatrix.multiply( indicesAboveLowerThreshold ) # this leaves only the weights that are above lower threshold, other entries are zero
 
 			# if any weight violates upper bound
